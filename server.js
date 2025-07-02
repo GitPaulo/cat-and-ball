@@ -16,7 +16,7 @@ const loadFrames = async () => {
     const buffer = await fs.readFile(path.join(framesDir, file));
     compressedFrames.push(buffer);
   }
-}
+};
 
 const quickHashForRequester = (str) => {
   let hash = 0;
@@ -67,6 +67,7 @@ fastify.get("/", (req, reply) => {
         const endTotal = process.hrtime.bigint();
         console.log(
           `Request from ${ip} | ${ua}
+frame: ${frameIdx}
 hash:  ${endHash - startHash} ns
 map:   ${endMap - startMap} ns
 send:  ${endSend - startSend} ns
