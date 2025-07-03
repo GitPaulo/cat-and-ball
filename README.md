@@ -2,8 +2,12 @@
 
 Cat goes fetch the ball!
 
-![](https://cat-and-ball.fly.dev/)
+<img src="https://cat-and-ball.fly.dev/?">
 
+```md
+![](https://cat-and-ball.fly.dev/?)
 ```
-![](https://cat-and-ball.fly.dev/)
+
+```md
+<img src="https://cat-and-ball.fly.dev/?">
 ```
