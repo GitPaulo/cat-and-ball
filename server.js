@@ -57,7 +57,6 @@ fastify.get("/", (req, reply) => {
   const endMap = debug ? process.hrtime.bigint() : 0;
 
   const startSend = debug ? process.hrtime.bigint() : 0;
-  reply;
   reply
     .header("Content-Type", "image/svg+xml")
     .header("Content-Encoding", "gzip")
