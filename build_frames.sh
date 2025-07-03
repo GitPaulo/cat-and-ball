@@ -8,7 +8,8 @@ for file in frames/*.txt; do
     base="${name%.txt}"
     svg="frames_compressed/${base}.svg"
 
-    echo -n "<svg xmlns='http://www.w3.org/2000/svg' width='600' height='80'>" >"$svg"
+    echo -n "<svg xmlns='http://www.w3.org/2000/svg' width='480' height='80'>" >"$svg"
+    echo -n "<rect width='100%' height='100%' fill='#212830'/>" >>"$svg"
     echo -n "<metadata>${base}</metadata>" >>"$svg"
     echo -n "<text font-family='Courier New, monospace' font-size='14' fill='white' xml:space='preserve'>" >>"$svg"
 
