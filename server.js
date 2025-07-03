@@ -58,7 +58,9 @@ fastify.get("/", (req, reply) => {
 
   const startSend = debug ? process.hrtime.bigint() : 0;
   reply
+  reply
     .header("Content-Type", "image/svg+xml")
+    .header("Content-Encoding", "gzip")
     .header("Cache-Control", "max-age=0, no-cache, no-store, must-revalidate")
     .send(buffer)
     .then(() => {
