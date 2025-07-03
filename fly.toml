@@ -1,26 +1,25 @@
-# fly.toml app configuration file generated for cat-and-ball on 2025-07-02T23:14:45Z
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
+# fly.toml app configuration file for cat-and-ball
 
-app = 'cat-and-ball'
-primary_region = 'lhr'
+app = "cat-and-ball"
+primary_region = "lhr"
 
 [build]
 
 [http_service]
   internal_port = 3000
   force_https = true
-  auto_stop_machines = 'stop'
+  auto_stop_machines = "stop"
   auto_start_machines = true
   min_machines_running = 0
-  processes = ['app']
+  processes = ["app"]
 
-# keep this low
 [[vm]]
-  memory = '256mb'
-  cpu_kind = 'shared'
+  memory = "256mb"
+  cpu_kind = "shared"
   cpus = 1
+
+[scale]
+  count = 1  # lock to a single instance
 
 [env]
   ENABLE_DEBUG = "1"
