@@ -10,7 +10,7 @@ const visitorFrames = new Map();
 
 const loadFrames = async () => {
   const files = await fs.readdir(framesDir);
-  const frameFiles = files.filter(f => f.endsWith(".svg.gz")).sort();
+  const frameFiles = files.filter((f) => f.endsWith(".svg.gz")).sort();
 
   for (const file of frameFiles) {
     const buffer = await fs.readFile(path.join(framesDir, file));
@@ -57,7 +57,7 @@ fastify.get("/", (req, reply) => {
   const endMap = debug ? process.hrtime.bigint() : 0;
 
   const startSend = debug ? process.hrtime.bigint() : 0;
-  reply
+  reply;
   reply
     .header("Content-Type", "image/svg+xml")
     .header("Content-Encoding", "gzip")
@@ -67,14 +67,16 @@ fastify.get("/", (req, reply) => {
       if (debug) {
         const endSend = process.hrtime.bigint();
         const endTotal = process.hrtime.bigint();
-        console.log(
-          `Request from ${ip} | ${ua}
-frame: ${frameIdx}
-hash:  ${endHash - startHash} ns
-map:   ${endMap - startMap} ns
-send:  ${endSend - startSend} ns
-total: ${endTotal - start} ns`
-        );
+
+        let log = "";
+        log += `Request from ${ip} | ${ua}\n`;
+        log += `frame: ${frameIdx}\n`;
+        log += `hash:  ${endHash - startHash} ns\n`;
+        log += `map:   ${endMap - startMap} ns\n`;
+        log += `send:  ${endSend - startSend} ns\n`;
+        log += `total: ${endTotal - start} ns`;
+
+        console.log(log);
       }
     });
 });
