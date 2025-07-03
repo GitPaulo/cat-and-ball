@@ -86,6 +86,6 @@ loadFrames().then(() => {
       console.error(err);
       process.exit(1);
     }
-    console.log(`🐾 Ultra-fast Cat server running at ${address}`);
+    console.log(`🐾 Cat and ball server running at ${address}`);
   });
 });
