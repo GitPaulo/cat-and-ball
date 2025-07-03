@@ -16,8 +16,9 @@ primary_region = 'lhr'
   min_machines_running = 0
   processes = ['app']
 
+# keep this low
 [[vm]]
-  memory = '512mb'
+  memory = '256mb'
   cpu_kind = 'shared'
   cpus = 1
 
