@@ -3,89 +3,90 @@ import fs from "fs/promises";
 import path from "path";
 
 const fastify = Fastify({ logger: false });
-const framesDir = path.join(process.cwd(), "frames_compressed");
+const RESPONSE_HEADERS = Object.freeze({
+  "Content-Type": "image/svg+xml; charset=utf-8",
+  "Content-Encoding": "gzip",
+  "Cache-Control": "max-age=0, no-cache, no-store, must-revalidate",
+});
 
-let compressedFrames = [];
+const framesDir = path.join(process.cwd(), "frames_compressed");
 const visitorFrames = new Map();
 
+const DEBUG = process.env.ENABLE_DEBUG === "true";
+if (DEBUG) {
+  fastify.addHook("onRequest", (req) => {
+    req._timings = { start: process.hrtime.bigint() };
+  });
+
+  fastify.addHook("onResponse", (req, reply, done) => {
+    const { start, hashTime, mapTime, sendTime } = req._timings;
+    const endTime = process.hrtime.bigint();
+
+    console.log(
+      `Request from ${req.ip} | ${req.headers["user-agent"] || ""}\n` +
+      `frame: ${req._frameIdx}\n` +
+      `hash:  ${hashTime - start} ns\n` +
+      `map:   ${mapTime - hashTime} ns\n` +
+      `send:  ${endTime - sendTime} ns\n` +
+      `total: ${endTime - start} ns`
+    );
+
+    done();
+  });
+}
+
+let compressedFrames = [];
 const loadFrames = async () => {
   const files = await fs.readdir(framesDir);
-  const frameFiles = files.filter((f) => f.endsWith(".svg.gz")).sort();
+  const frameFiles = files.filter((file) => file.endsWith(".svg.gz")).sort();
 
-  for (const file of frameFiles) {
-    const buffer = await fs.readFile(path.join(framesDir, file));
-    compressedFrames.push(buffer);
-  }
+  /**
+   * Compress the frames into memory to avoid reading from disk on each request.
+   * Sort them to ensure conrrect order.
+   */
+  compressedFrames = await Promise.all(
+    frameFiles.map((file) => fs.readFile(path.join(framesDir, file)))
+  );
 };
-
-const quickHashForRequester = (str) => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash * 31 + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
-};
-
-fastify.addHook("onRequest", async (req) => {
-  if (process.env.ENABLE_DEBUG) {
-    req.startTime = process.hrtime.bigint();
-  }
-});
-
-fastify.addHook("onSend", async (req) => {
-  if (process.env.ENABLE_DEBUG && req.startTime) {
-    const total = process.hrtime.bigint() - req.startTime;
-    console.log(`Fastify onSend timing: total=${total} ns for ${req.raw.url}`);
-  }
-});
 
 fastify.get("/", (req, reply) => {
-  const debug = Boolean(process.env.ENABLE_DEBUG);
+  if (DEBUG) {
+    req._timings.hashTime = process.hrtime.bigint();
+  }
 
-  const start = debug ? process.hrtime.bigint() : 0;
-  const { ip, headers } = req;
-  const ua = headers["user-agent"] ?? "";
+  // Use a combination of IP and User-Agent to create a unique key for each visitor
+  // Caveat:
+  // - This does not handle cases where multiple users share the same IP (e.g., NAT)
+  // - User-Agent can be spoofed, but it's a reasonable heuristic for this use case
+  // - This will not work in a distributed environment, but we don't do that here
+  const visitorKey = `${req.ip}|${req.headers["user-agent"] || ""}`;
 
-  const startHash = debug ? process.hrtime.bigint() : 0;
-  const visitorKey = quickHashForRequester(`${ip}|${ua}`);
-  const endHash = debug ? process.hrtime.bigint() : 0;
+  if (DEBUG) {
+    req._timings.mapTime = process.hrtime.bigint();
+  }
 
-  const startMap = debug ? process.hrtime.bigint() : 0;
-  let frameIdx = visitorFrames.get(visitorKey) ?? 0;
+  const frameIdx = visitorFrames.get(visitorKey) || 0;
   visitorFrames.set(visitorKey, (frameIdx + 1) % compressedFrames.length);
-  const buffer = compressedFrames[frameIdx];
-  const endMap = debug ? process.hrtime.bigint() : 0;
+  req._frameIdx = frameIdx;
 
-  const startSend = debug ? process.hrtime.bigint() : 0;
-  reply
-    .header("Content-Type", "image/svg+xml")
-    .header("Content-Encoding", "gzip")
-    .header("Cache-Control", "max-age=0, no-cache, no-store, must-revalidate")
-    .send(buffer)
-    .then(() => {
-      if (debug) {
-        const endSend = process.hrtime.bigint();
-        const endTotal = process.hrtime.bigint();
+  if (DEBUG) {
+    req._timings.sendTime = process.hrtime.bigint();
+  }
 
-        let log = "";
-        log += `Request from ${ip} | ${ua}\n`;
-        log += `frame: ${frameIdx}\n`;
-        log += `hash:  ${endHash - startHash} ns\n`;
-        log += `map:   ${endMap - startMap} ns\n`;
-        log += `send:  ${endSend - startSend} ns\n`;
-        log += `total: ${endTotal - start} ns`;
+  reply.headers(RESPONSE_HEADERS).send(compressedFrames[frameIdx]);
+});
 
-        console.log(log);
+loadFrames()
+  .then(() => {
+    fastify.listen({ port: 3000, host: "0.0.0.0" }, (err, address) => {
+      if (err) {
+        console.error(err);
+        process.exit(1);
       }
+      console.log(`🐾 Cat and ball server running at ${address}`);
     });
-});
-
-loadFrames().then(() => {
-  fastify.listen({ port: 3000, host: "0.0.0.0" }, (err, address) => {
-    if (err) {
-      console.error(err);
-      process.exit(1);
-    }
-    console.log(`🐾 Cat and ball server running at ${address}`);
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
   });
-});
