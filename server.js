@@ -2,6 +2,10 @@ import Fastify from "fastify";
 import fs from "fs/promises";
 import path from "path";
 
+const isProduction = process.env.NODE_ENV === "production";
+const isDebug = process.env.ENABLE_DEBUG === "true";
+const dayOffset = parseInt(process.env.DAY_OFFSET || "0", 10);
+
 const fastify = Fastify({ logger: false, trustProxy: true });
 const asciiCompressedBaseDir = path.join(process.cwd(), "ascii-compressed");
 
@@ -44,7 +48,6 @@ setInterval(() => {
   }
 }).unref();
 
-const isDebug = process.env.ENABLE_DEBUG === "true";
 if (isDebug) {
   fastify.addHook("onRequest", (req) => {
     req._timings = { start: process.hrtime.bigint() };
@@ -74,7 +77,7 @@ async function getAnimationForToday() {
     .sort((a, b) => a - b);
   if (animDirs.length === 0)
     throw new Error("No animation directories found in ascii-compressed/");
-  const days = Math.floor(Date.now() / 86_400_000);
+  const days = Math.floor(Date.now() / 86_400_000) + dayOffset;
   const selected = animDirs[days % animDirs.length];
   return path.join(asciiCompressedBaseDir, String(selected));
 }
@@ -138,7 +141,8 @@ loadFrames()
         console.error(err);
         process.exit(1);
       }
-      console.log(`🐾 Cat and ball server running at ${address}`);
+      const displayAddress = isProduction ? address : "http://localhost:3000";
+      console.log(`🐾 Cat and ball server running at ${displayAddress}`);
     });
   })
   .catch((err) => {
