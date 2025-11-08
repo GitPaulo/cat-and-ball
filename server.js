@@ -30,12 +30,11 @@ function nextFrameIndex(key, frameCount) {
 
   visitorFrames.set(key, { idx: next, at: now });
 
+  // Emergency cleanup: if map exceeds limit, remove oldest entry
+  // Maps preserve insertion order, so first key is oldest
   if (visitorFrames.size > MAX_VISITORS) {
-    let surplus = visitorFrames.size - MAX_VISITORS;
-    for (const k of visitorFrames.keys()) {
-      visitorFrames.delete(k);
-      if (--surplus === 0) break;
-    }
+    const firstKey = visitorFrames.keys().next().value;
+    visitorFrames.delete(firstKey);
   }
   return idx;
 }
@@ -46,7 +45,7 @@ setInterval(() => {
   for (const [k, v] of visitorFrames) {
     if (now - v.at > TTL_MS) visitorFrames.delete(k);
   }
-}).unref();
+}, TTL_MS).unref();
 
 if (isDebug) {
   fastify.addHook("onRequest", (req) => {
@@ -104,7 +103,7 @@ async function loadFrames() {
 
   // Prebuild per-frame headers with Content-Length to avoid runtime calc
   frames = bufs;
-  frameHeaders = bufs.map((b) => ({
+  frameHeaders = bufs.map((b) => Object.freeze({
     ...BASE_HEADERS,
     "Content-Length": String(b.length),
   }));
@@ -115,18 +114,22 @@ async function loadFrames() {
 fastify.get("/", (req, reply) => {
   if (isDebug) req._timings.hashTime = process.hrtime.bigint();
 
-  const visitorKey = `${req.ip}|${req.headers["user-agent"] || ""}`;
-  if (isDebug) req._timings.mapTime = process.hrtime.bigint();
+  // Build visitor key - truncate if needed to prevent DoS via large user-agent
+  const ip = req.ip;
+  const ua = req.headers["user-agent"] || "";
+  const visitorKey = (ip.length + ua.length > 511)
+    ? `${ip}|${ua.slice(0, 511 - ip.length)}`
+    : `${ip}|${ua}`;
 
-  const count = frames.length;
-  if (count === 0) {
-    reply.code(503).send("frames-unavailable");
+  if (isDebug) req._timings.mapKey = process.hrtime.bigint();
+
+  if (frames.length === 0) {
+    reply.code(503).type('text/plain').send("frames-unavailable");
     return;
   }
 
-  const frameIdx = nextFrameIndex(visitorKey, count);
-  req._frameIdx = frameIdx;
-
+  const frameIdx = nextFrameIndex(visitorKey, frames.length);
+  if (isDebug) req._frameIdx = frameIdx;
   if (isDebug) req._timings.sendTime = process.hrtime.bigint();
 
   // Zero copy send of preloaded Buffer + prebuilt headers
