@@ -160,7 +160,10 @@ fastify.get("/health", (_, reply) => {
 // Startup
 loadFrames()
   .then(() => {
-    fastify.listen({ port: 3000, host: "0.0.0.0" }, (err) => {
+    console.log("Frames loaded successfully");
+    const port = parseInt(process.env.PORT || "3000", 10);
+    console.log(`Attempting to listen on ${port}...`);
+    fastify.listen({ port, host: "0.0.0.0" }, (err) => {
       if (err) {
         console.error("listen error:", err);
         process.exit(1);
@@ -190,6 +193,10 @@ loadFrames()
     });
   })
   .catch((err) => {
-    console.error("startup error:", err);
+    console.error("[Startup Error]");
+    console.error("Error:", err.message);
+    console.error("Stack:", err.stack);
+    console.error("Current directory:", process.cwd());
+    console.error("Looking for frames in:", asciiCompressedBaseDir);
     process.exit(1);
   });
