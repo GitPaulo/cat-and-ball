@@ -22,4 +22,5 @@ primary_region = "lhr"
   count = 1  # lock to a single instance
 
 [env]
-  ENABLE_DEBUG = "1"
+  ENABLE_DEBUG = true
+  PRODUCTION = true
