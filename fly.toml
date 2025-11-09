@@ -13,6 +13,14 @@ primary_region = "lhr"
   min_machines_running = 0
   processes = ["app"]
 
+[[http_service.checks]]
+  grace_period = "15s"
+  interval = "5s"
+  timeout = "2s"
+  method = "GET"
+  path = "/health"
+  protocol = "http"
+
 [[vm]]
   memory = "256mb"
   cpu_kind = "shared"
@@ -22,5 +30,5 @@ primary_region = "lhr"
   count = 1  # lock to a single instance
 
 [env]
-  ENABLE_DEBUG = true
-  PRODUCTION = true
+  ENABLE_DEBUG = "true"
+  PRODUCTION = "true"

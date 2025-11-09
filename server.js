@@ -2,9 +2,16 @@ import Fastify from "fastify";
 import fs from "fs/promises";
 import path from "path";
 
-const isProduction = process.env.NODE_ENV === "production" || process.env.PRODUCTION === "true";
+const isProduction =
+  process.env.NODE_ENV === "production" || process.env.PRODUCTION === "true";
 const isDebug = process.env.ENABLE_DEBUG === "true";
 const dayOffset = parseInt(process.env.DAY_OFFSET || "0", 10);
+
+if (isDebug) {
+  console.log("env:", { isProduction, isDebug, dayOffset });
+  console.log("cwd:", process.cwd());
+  console.log("node:", process.version);
+}
 
 const fastify = Fastify({ logger: false, trustProxy: true });
 const asciiCompressedBaseDir = path.join(process.cwd(), "ascii-compressed");
@@ -69,7 +76,9 @@ if (isDebug) {
 }
 
 async function getAnimationForToday() {
-  const entries = await fs.readdir(asciiCompressedBaseDir, { withFileTypes: true });
+  const entries = await fs.readdir(asciiCompressedBaseDir, {
+    withFileTypes: true,
+  });
   const animDirs = entries
     .filter((e) => e.isDirectory() && /^\d+$/.test(e.name))
     .map((e) => parseInt(e.name, 10))
@@ -103,10 +112,12 @@ async function loadFrames() {
 
   // Prebuild per-frame headers with Content-Length to avoid runtime calc
   frames = bufs;
-  frameHeaders = bufs.map((b) => Object.freeze({
-    ...BASE_HEADERS,
-    "Content-Length": String(b.length),
-  }));
+  frameHeaders = bufs.map((b) =>
+    Object.freeze({
+      ...BASE_HEADERS,
+      "Content-Length": String(b.length),
+    })
+  );
 
   console.log(`Loaded animation from: ${dir} (${bufs.length} frames)`);
 }
@@ -117,14 +128,15 @@ fastify.get("/", (req, reply) => {
   // Build visitor key - truncate if needed to prevent DoS via large user-agent
   const ip = req.ip;
   const ua = req.headers["user-agent"] || "";
-  const visitorKey = (ip.length + ua.length > 511)
-    ? `${ip}|${ua.slice(0, 511 - ip.length)}`
-    : `${ip}|${ua}`;
+  const visitorKey =
+    ip.length + ua.length > 511
+      ? `${ip}|${ua.slice(0, 511 - ip.length)}`
+      : `${ip}|${ua}`;
 
   if (isDebug) req._timings.mapKey = process.hrtime.bigint();
 
   if (frames.length === 0) {
-    reply.code(503).type('text/plain').send("frames-unavailable");
+    reply.code(503).type("text/plain").send("frames-unavailable");
     return;
   }
 
@@ -150,16 +162,34 @@ loadFrames()
   .then(() => {
     fastify.listen({ port: 3000, host: "0.0.0.0" }, (err) => {
       if (err) {
-        console.error(err);
+        console.error("listen error:", err);
         process.exit(1);
       }
-      const port = fastify.server.address().port;
-      console.log(`🐾 Cat and ball server running on port ${port}`);
-      if (!isProduction)
-        console.log(`localhost: http://localhost:3000`);
+
+      const addr = fastify.server.address();
+      console.log(`🐾 Cat and ball server running on port ${addr.port}`);
+      if (!isProduction) console.log(`localhost: http://localhost:3000`);
+
+      if (isDebug) {
+        console.log("bind addr:", addr);
+        console.log("trust proxy:", fastify.initialConfig.trustProxy);
+        import("os").then(({ networkInterfaces }) => {
+          const summary = Object.entries(networkInterfaces())
+            .map(([name, addrs]) => {
+              const v4 =
+                (addrs || [])
+                  .filter((a) => a.family === "IPv4")
+                  .map((a) => a.address)
+                  .join(", ") || "-";
+              return `${name}: ${v4}`;
+            })
+            .join(" | ");
+          console.log("network interfaces:", summary);
+        });
+      }
     });
   })
   .catch((err) => {
-    console.error(err);
+    console.error("startup error:", err);
     process.exit(1);
   });
