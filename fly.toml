@@ -1,34 +1,28 @@
-# fly.toml app configuration file for cat-and-ball
-
 app = "cat-and-ball"
 primary_region = "lhr"
 
 [build]
 
 [http_service]
-  internal_port = 3000
-  force_https = true
-  auto_stop_machines = "stop"
-  auto_start_machines = true
-  min_machines_running = 0
-  processes = ["app"]
+internal_port = 3000
+force_https = true
+auto_stop_machines = "stop"
+auto_start_machines = true
+min_machines_running = 1
 
-[[http_service.checks]]
-  grace_period = "15s"
+  [[http_service.checks]]
+  grace_period = "60s"
   interval = "5s"
-  timeout = "2s"
-  method = "GET"
-  path = "/health"
+  timeout  = "2s"
+  method   = "GET"
+  path     = "/health"
   protocol = "http"
 
 [[vm]]
-  memory = "256mb"
-  cpu_kind = "shared"
-  cpus = 1
-
-[scale]
-  count = 1  # lock to a single instance
+memory = "256mb"
+cpu_kind = "shared"
+cpus = 1
 
 [env]
-  ENABLE_DEBUG = "true"
-  PRODUCTION = "true"
+ENABLE_DEBUG = "true"
+PRODUCTION   = "true"
