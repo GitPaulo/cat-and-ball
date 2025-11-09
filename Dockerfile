@@ -27,6 +27,8 @@ RUN npm ci
 # Copy application code
 COPY . .
 
+# Build compressed frames
+RUN bash build_frames.sh
 
 # Final stage for app image
 FROM base

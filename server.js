@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import fs from "fs/promises";
 import path from "path";
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = process.env.NODE_ENV === "production" || process.env.PRODUCTION === "true";
 const isDebug = process.env.ENABLE_DEBUG === "true";
 const dayOffset = parseInt(process.env.DAY_OFFSET || "0", 10);
 
@@ -136,16 +136,27 @@ fastify.get("/", (req, reply) => {
   reply.headers(frameHeaders[frameIdx]).send(frames[frameIdx]);
 });
 
+// Health check
+fastify.get("/health", (_, reply) => {
+  if (frames.length === 0) {
+    reply.code(503).type("text/plain").send("not ready");
+    return;
+  }
+  reply.code(200).type("text/plain").send("ok");
+});
+
 // Startup
 loadFrames()
   .then(() => {
-    fastify.listen({ port: 3000, host: "0.0.0.0" }, (err, address) => {
+    fastify.listen({ port: 3000, host: "0.0.0.0" }, (err) => {
       if (err) {
         console.error(err);
         process.exit(1);
       }
-      const displayAddress = isProduction ? address : "http://localhost:3000";
-      console.log(`🐾 Cat and ball server running at ${displayAddress}`);
+      const port = fastify.server.address().port;
+      console.log(`🐾 Cat and ball server running on port ${port}`);
+      if (!isProduction)
+        console.log(`localhost: http://localhost:3000`);
     });
   })
   .catch((err) => {
