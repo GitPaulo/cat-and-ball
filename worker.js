@@ -79,7 +79,6 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // Health check endpoint
     if (url.pathname === "/health") {
       return new Response("ok", {
         status: 200,
@@ -87,17 +86,26 @@ export default {
       });
     }
 
-    // Main frame endpoint
     if (url.pathname === "/") {
       try {
         // Get visitor info
         const ip = request.headers.get("CF-Connecting-IP") || "unknown";
         const ua = request.headers.get("User-Agent") || "";
 
-        // Include any query parameters in the visitor hash to bust GitHub's cache
-        // GitHub often appends ?v=timestamp or similar
-        const queryString = url.search || "";
-        const visitorHash = await hashVisitorKey(ip + queryString, ua);
+        // Detect if request is from GitHub Camo proxy
+        const isGitHubCamo = ua.includes("github-camo") ||
+          request.headers.get("via")?.includes("github-camo");
+
+        let visitorHash;
+        if (isGitHubCamo) {
+          // For GitHub Camo: use a global key since we can't distinguish individual visitors
+          // Camo rotates IPs and strips user info, so all requests look identical
+          visitorHash = "github-camo-global";
+        } else {
+          // For direct requests: use IP + query + UA for per-visitor tracking
+          const queryString = url.search || "";
+          visitorHash = await hashVisitorKey(ip + queryString, ua);
+        }
 
         // Load frames for today's animation
         const frames = loadFrames();
