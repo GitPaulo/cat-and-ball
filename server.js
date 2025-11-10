@@ -1,18 +1,32 @@
 import Fastify from "fastify";
 import fs from "fs/promises";
 import path from "path";
+import pino from "pino";
 
 const isProduction =
   process.env.NODE_ENV === "production" || process.env.PRODUCTION === "true";
 const isDebug = process.env.ENABLE_DEBUG === "true";
 const dayOffset = parseInt(process.env.DAY_OFFSET || "0", 10);
 
-if (isDebug) {
-  console.log("env:", { isProduction, isDebug, dayOffset });
-  console.log("cwd:", process.cwd());
-  console.log("node:", process.version);
-}
+// logger
+const log = pino({
+  level: isDebug ? "debug" : "info",
+  transport: !isProduction
+    ? {
+      target: "pino-pretty",
+      options: {
+        colorize: true,
+        translateTime: "HH:MM:ss.l",
+        singleLine: false,
+        ignore: "pid,hostname"
+      }
+    }
+    : undefined
+});
+log.debug({ isProduction, isDebug, dayOffset }, "env");
+log.debug({ cwd: process.cwd(), node: process.version }, "runtime");
 
+// Consts
 const fastify = Fastify({ logger: false, trustProxy: true });
 const asciiCompressedBaseDir = path.join(process.cwd(), "ascii-compressed");
 
@@ -46,34 +60,13 @@ function nextFrameIndex(key, frameCount) {
   return idx;
 }
 
-// background TTL sweep to keep request path flat
+// Background TTL sweep to keep request path flat
 setInterval(() => {
   const now = Date.now();
   for (const [k, v] of visitorFrames) {
     if (now - v.at > TTL_MS) visitorFrames.delete(k);
   }
 }, TTL_MS).unref();
-
-if (isDebug) {
-  fastify.addHook("onRequest", (req) => {
-    req._timings = { start: process.hrtime.bigint() };
-  });
-
-  fastify.addHook("onResponse", (req, _, done) => {
-    const t = req._timings;
-    if (!t) return done();
-    const end = process.hrtime.bigint();
-    console.log(
-      `Request from ${req.ip} | ${req.headers["user-agent"] || ""}\n` +
-      `frame: ${req._frameIdx}\n` +
-      `key:   ${t.hashTime - t.start} ns\n` +
-      `map:   ${t.mapTime - t.hashTime} ns\n` +
-      `send:  ${end - t.sendTime} ns\n` +
-      `total: ${end - t.start} ns`
-    );
-    done();
-  });
-}
 
 async function getAnimationForToday() {
   const entries = await fs.readdir(asciiCompressedBaseDir, {
@@ -119,8 +112,12 @@ async function loadFrames() {
     })
   );
 
-  console.log(`Loaded animation from: ${dir} (${bufs.length} frames)`);
+  log.info({ dir, frames: bufs.length }, "animation loaded");
 }
+
+//
+// Routes
+//
 
 fastify.get("/", (req, reply) => {
   if (isDebug) req._timings.hashTime = process.hrtime.bigint();
@@ -133,7 +130,7 @@ fastify.get("/", (req, reply) => {
       ? `${ip}|${ua.slice(0, 511 - ip.length)}`
       : `${ip}|${ua}`;
 
-  if (isDebug) req._timings.mapKey = process.hrtime.bigint();
+  if (isDebug) req._timings.mapTime = process.hrtime.bigint();
 
   if (frames.length === 0) {
     reply.code(503).type("text/plain").send("frames-unavailable");
@@ -148,34 +145,74 @@ fastify.get("/", (req, reply) => {
   reply.headers(frameHeaders[frameIdx]).send(frames[frameIdx]);
 });
 
-// Health check
-fastify.get("/health", (_, reply) => {
-  if (frames.length === 0) {
+// Health check endpoint for Fly.io
+fastify.get("/health", (req, reply) => {
+  const ready = frames.length > 0;
+  if (isDebug || !isProduction) {
+    log.info({ frames: frames.length, ready, from: req.ip }, "health");
+  }
+
+  if (!ready) {
     reply.code(503).type("text/plain").send("not ready");
     return;
   }
+
   reply.code(200).type("text/plain").send("ok");
 });
 
-// Startup
+//
+// Hooks
+//
+
+if (isDebug) {
+  fastify.addHook("onRequest", (req) => {
+    req._timings = { start: process.hrtime.bigint() };
+  });
+
+  fastify.addHook("onResponse", (req, _, done) => {
+    const t = req._timings;
+    if (!t) return done();
+    const end = process.hrtime.bigint();
+    log.debug(
+      {
+        ip: req.ip,
+        ua: req.headers["user-agent"] || "",
+        frame: req._frameIdx,
+        key_ns: String(t.hashTime - t.start),
+        map_ns: String(t.mapTime - t.hashTime),
+        send_ns: String(end - t.sendTime),
+        total_ns: String(end - t.start),
+      },
+      "request timings"
+    );
+    done();
+  });
+}
+
+// Start
 loadFrames()
   .then(() => {
-    console.log("Frames loaded successfully");
+    log.info("Frames loaded successfully");
     const port = parseInt(process.env.PORT || "3000", 10);
-    console.log(`Attempting to listen on ${port}...`);
+    log.info({ port }, "attempting to listen");
+
     fastify.listen({ port, host: "0.0.0.0" }, (err) => {
       if (err) {
-        console.error("listen error:", err);
+        log.error({ err }, "listen error");
         process.exit(1);
       }
 
       const addr = fastify.server.address();
-      console.log(`🐾 Cat and ball server running on port ${addr.port}`);
-      if (!isProduction) console.log(`localhost: http://localhost:3000`);
+      const portOut = addr && typeof addr === "object" ? addr.port : port;
+      log.info({ port: portOut }, "cat-and-ball server running");
+      if (!isProduction) log.info({ url: `http://localhost:${port}` }, "local url");
 
       if (isDebug) {
-        console.log("bind addr:", addr);
-        console.log("trust proxy:", fastify.initialConfig.trustProxy);
+        log.debug({ addr }, "bind addr");
+        log.debug(
+          { trustProxy: String(fastify.initialConfig.trustProxy) },
+          "trust proxy"
+        );
         import("os").then(({ networkInterfaces }) => {
           const summary = Object.entries(networkInterfaces())
             .map(([name, addrs]) => {
@@ -187,16 +224,19 @@ loadFrames()
               return `${name}: ${v4}`;
             })
             .join(" | ");
-          console.log("network interfaces:", summary);
+          log.debug({ summary }, "network interfaces");
         });
       }
     });
   })
   .catch((err) => {
-    console.error("[Startup Error]");
-    console.error("Error:", err.message);
-    console.error("Stack:", err.stack);
-    console.error("Current directory:", process.cwd());
-    console.error("Looking for frames in:", asciiCompressedBaseDir);
+    log.error(
+      {
+        err,
+        cwd: process.cwd(),
+        baseDir: asciiCompressedBaseDir,
+      },
+      "startup error"
+    );
     process.exit(1);
   });

@@ -4,19 +4,18 @@ primary_region = "lhr"
 [build]
 
 [http_service]
-internal_port = 3000
+internal_port = 8080
 force_https = true
 auto_stop_machines = "stop"
 auto_start_machines = true
 min_machines_running = 1
 
-  [[http_service.checks]]
-  grace_period = "60s"
-  interval = "5s"
-  timeout  = "2s"
-  method   = "GET"
-  path     = "/health"
-  protocol = "http"
+[[http_service.checks]]
+grace_period = "10s"
+interval = "15s"
+timeout = "5s"
+method = "GET"
+path = "/health"
 
 [[vm]]
 memory = "256mb"
@@ -24,5 +23,7 @@ cpu_kind = "shared"
 cpus = 1
 
 [env]
+PORT = "8080"
 ENABLE_DEBUG = "true"
-PRODUCTION   = "true"
+PRODUCTION = "true"
+NODE_ENV = "production"
