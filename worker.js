@@ -1,8 +1,11 @@
 import { FRAMES, ANIMATION_IDS } from "./gen/frames.js";
 
 const BASE_HEADERS = {
-  "Content-Type": "image/svg+xml; charset=utf-8",
-  "Cache-Control": "max-age=0, no-cache, no-store, must-revalidate",
+  "Content-Type": "image/svg+xml",
+  // Trying to avoid github cammo caching
+  "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0, s-maxage=0",
+  "Pragma": "no-cache",
+  "Expires": "Fri, 01 Jan 1980 00:00:00 GMT",
   "X-Content-Type-Options": "nosniff",
 };
 
@@ -52,7 +55,6 @@ function loadFrames() {
 
 /**
  * Get the next frame index for a visitor
- * Returns the CURRENT index and stores the NEXT index (matching server.js logic)
  */
 async function getNextFrameIndex(env, visitorHash, frameCount) {
   if (frameCount <= 0) return 0;
@@ -91,7 +93,11 @@ export default {
         // Get visitor info
         const ip = request.headers.get("CF-Connecting-IP") || "unknown";
         const ua = request.headers.get("User-Agent") || "";
-        const visitorHash = await hashVisitorKey(ip, ua);
+
+        // Include any query parameters in the visitor hash to bust GitHub's cache
+        // GitHub often appends ?v=timestamp or similar
+        const queryString = url.search || "";
+        const visitorHash = await hashVisitorKey(ip + queryString, ua);
 
         // Load frames for today's animation
         const frames = loadFrames();
@@ -99,12 +105,19 @@ export default {
         // Get the frame index for this visitor
         const frameIdx = await getNextFrameIndex(env, visitorHash, frames.length);
 
-        // Serve the frame
+        // Serve frame
+        const timestamp = Date.now();
         return new Response(frames[frameIdx], {
           status: 200,
           headers: {
             ...BASE_HEADERS,
             "Content-Length": String(frames[frameIdx].length),
+            // Unique ETag per frame + timestamp to prevent any caching
+            "ETag": `"${frameIdx}-${timestamp}"`,
+            // Always set to current time so Camo sees it as "fresh"
+            "Last-Modified": new Date().toUTCString(),
+            // Additional cache busting
+            "Vary": "Accept-Encoding, User-Agent",
           },
         });
       } catch (error) {
