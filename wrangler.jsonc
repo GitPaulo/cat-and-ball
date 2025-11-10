@@ -1,0 +1,19 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "cat-and-ball",
+	"main": "worker.js",
+	"compatibility_date": "2025-11-09",
+	"kv_namespaces": [
+		{
+			"binding": "VISITOR_STATE",
+			"id": "630539a41ec6464dba2928be3f519f9c"
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
+}
