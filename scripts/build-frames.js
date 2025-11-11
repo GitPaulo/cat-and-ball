@@ -64,7 +64,7 @@ async function generateFramesModule() {
         .join("");
 
       const svg =
-        "<svg xmlns='http://www.w3.org/2000/svg' width='480' height='80'>" +
+        "<svg xmlns='http://www.w3.org/2000/svg' width='480' height='96'>" +
         "<rect width='100%' height='100%' fill='#212830'/>" +
         `<metadata>${xmlEscape(base)}</metadata>` +
         "<text font-family='Courier New, monospace' font-size='14' fill='white' xml:space='preserve' y='0'>" +
