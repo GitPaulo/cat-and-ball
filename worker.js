@@ -8,8 +8,8 @@ const BASE_HEADERS = {
   "Expires": "Fri, 01 Jan 1980 00:00:00 GMT",
   "X-Content-Type-Options": "nosniff",
 };
-
 const TTL_SECONDS = 3600; // 1 hour
+const frameCache = new Map(); // Cache for decoded frames
 
 /**
  * Hash a visitor key (IP + User-Agent) for privacy
@@ -35,20 +35,37 @@ function getAnimationForToday() {
 }
 
 /**
+ * Decode base64 to UTF-8 string
+ * atob() treats bytes as Latin-1, so we need to decode UTF-8 properly
+ */
+function base64ToUtf8(b64) {
+  const binaryString = atob(b64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+/**
  * Load frames for the current animation
- * Since frames are stored as plain SVG text (base64), just decode them
- * Cloudflare Workers will handle gzip compression automatically
  */
 function loadFrames() {
   const animId = getAnimationForToday();
-  const frameData = FRAMES[animId];
 
+  // Check cache first
+  if (frameCache.has(animId)) {
+    return frameCache.get(animId);
+  }
+
+  const frameData = FRAMES[animId];
   if (!frameData || frameData.length === 0) {
     throw new Error(`No frames found for animation ${animId}`);
   }
 
-  // Frames are base64-encoded SVG text - decode to strings
-  const frames = frameData.map((b64) => atob(b64));
+  // Decode base64-encoded UTF-8 frames
+  const frames = frameData.map(base64ToUtf8);
+  frameCache.set(animId, frames);
 
   return frames;
 }
@@ -113,13 +130,13 @@ export default {
         // Get the frame index for this visitor
         const frameIdx = await getNextFrameIndex(env, visitorHash, frames.length);
 
-        // Serve frame
+        // Serve frame (Response automatically encodes string as UTF-8)
+        const frame = frames[frameIdx];
         const timestamp = Date.now();
-        return new Response(frames[frameIdx], {
+        return new Response(frame, {
           status: 200,
           headers: {
             ...BASE_HEADERS,
-            "Content-Length": String(frames[frameIdx].length),
             // Unique ETag per frame + timestamp to prevent any caching
             "ETag": `"${frameIdx}-${timestamp}"`,
             // Always set to current time so Camo sees it as "fresh"
