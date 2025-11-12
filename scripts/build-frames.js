@@ -64,10 +64,11 @@ async function generateFramesModule() {
         .join("");
 
       const svg =
+        "<?xml version='1.0' encoding='UTF-8'?>" +
         "<svg xmlns='http://www.w3.org/2000/svg' width='480' height='96'>" +
         "<rect width='100%' height='100%' fill='#212830'/>" +
         `<metadata>${xmlEscape(base)}</metadata>` +
-        "<text font-family='Courier New, monospace' font-size='14' fill='white' xml:space='preserve' y='0'>" +
+        "<text font-family='Consolas, DejaVu Sans Mono, Courier New, monospace' font-size='14' fill='white' xml:space='preserve' y='0'>" +
         tspans +
         "</text></svg>";
 

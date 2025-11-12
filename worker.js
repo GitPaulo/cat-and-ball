@@ -1,7 +1,7 @@
 import { FRAMES, ANIMATION_IDS } from "./gen/frames.js";
 
 const BASE_HEADERS = {
-  "Content-Type": "image/svg+xml",
+  "Content-Type": "image/svg+xml; charset=utf-8",
   // Trying to avoid github cammo caching
   "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0, s-maxage=0",
   "Pragma": "no-cache",
